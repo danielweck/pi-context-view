@@ -80,6 +80,9 @@ not in notifications it would hide.
   as a level.
 - `/` filters the Injections tree or searches a preview, per
   [Search and filter](#search-and-filter).
+- `c` copies the highlighted row or block, or the open content when a single
+  item is already open. Copy the captured, sanitized content itself, without
+  preview wrapping, indentation, subheaders, or JSON expansion.
 - Skip non-selectable rows and keep selection and scrolling bounded after
   resize. View-specific actions must be available and advertised together.
 
