@@ -32,14 +32,14 @@ export type WheelDirection = -1 | 1;
  * other input, including horizontal notches. Modifier bits are ignored, so a
  * modified notch scrolls like a plain one, as it does in pi's own viewport.
  */
-export function parseWheelDirection(data: string): WheelDirection | undefined {
-	const sgrButton = SGR_WHEEL_PATTERN.exec(data)?.[1];
-	if (sgrButton !== undefined) return decodeWheelButton(Number.parseInt(sgrButton, 10));
-	if (data.length === X10_LENGTH && data.startsWith(X10_PREFIX)) {
-		return decodeWheelButton(data.charCodeAt(X10_BUTTON_INDEX) - X10_BYTE_OFFSET);
-	}
-	return undefined;
-}
+// export function parseWheelDirection(data: string): WheelDirection | undefined {
+// 	const sgrButton = SGR_WHEEL_PATTERN.exec(data)?.[1];
+// 	if (sgrButton !== undefined) return decodeWheelButton(Number.parseInt(sgrButton, 10));
+// 	if (data.length === X10_LENGTH && data.startsWith(X10_PREFIX)) {
+// 		return decodeWheelButton(data.charCodeAt(X10_BUTTON_INDEX) - X10_BYTE_OFFSET);
+// 	}
+// 	return undefined;
+// }
 
 /**
  * Lines one notch scrolls in the surrounding TUI.
