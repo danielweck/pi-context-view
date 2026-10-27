@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## `[v0.8.1]` - 26.10.2026
+
+Maintenance release with support for Pi 1.4.0 and a few small fixes.
 
 ### Changed
 * `[views]` Show a tool's rendered `Tools` and `Rules` lines in its preview at 0 tokens.
