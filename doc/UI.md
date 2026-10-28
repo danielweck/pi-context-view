@@ -82,7 +82,10 @@ not in notifications it would hide.
   [Search and filter](#search-and-filter).
 - `c` copies the highlighted row or block, or the open content when a single
   item is already open. Copy the captured, sanitized content itself, without
-  preview wrapping, indentation, subheaders, or JSON expansion.
+  preview wrapping, indentation, subheaders, or JSON expansion. A list filter
+  applies: copy only what the view shows. The view reports the outcome in a
+  transient footer notice (`Copying…`, the copied size, or the failure), which
+  the next key clears.
 - Skip non-selectable rows and keep selection and scrolling bounded after
   resize. View-specific actions must be available and advertised together.
 
@@ -90,9 +93,10 @@ Use pi's keybinding APIs. In fullscreen mode, the mouse wheel follows keyboard
 navigation; in regular mode it remains terminal scrollback. Keep hints usable
 without mouse support.
 
-Raw content appears only after explicit Enter selection, never in overview
-rows, descriptions, or status bars. Sanitize dynamic text before styling and
-rendering; [privacy.md](architecture/privacy.md#privacy) owns the full contract.
+Raw content appears on screen only after explicit Enter selection, never in
+overview rows, descriptions, or status bars. Sanitize dynamic text before
+styling and rendering; [privacy.md](architecture/privacy.md#privacy) owns the
+full contract.
 
 ### Search and filter
 

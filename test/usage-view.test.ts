@@ -1890,6 +1890,7 @@ test("UsageView copies the highlighted category, block, and open content", async
 	view.handleInput("c");
 	await settleCopy();
 	assert.equal(copied[1], "first result");
+	assert.match(plainFrame(view).join("\n"), /Copied [\d,]+ chars/);
 
 	const single = createView(createTheme(), { usage: usage() }, () => {}, () => 30, undefined, {
 		copyText: async (text) => { copied.push(text); },
@@ -1899,15 +1900,56 @@ test("UsageView copies the highlighted category, block, and open content", async
 	single.handleInput("c");
 	await settleCopy();
 	assert.equal(copied[2], "read result content line\nsecond line");
+	assert.match(plainFrame(single).join("\n"), /Copied [\d,]+ chars/);
 });
 
 test("UsageView reports an empty highlighted category without writing the clipboard", async () => {
 	const copied: string[] = [];
-	const view = createView(createTheme(), { usage: usage() }, () => {}, () => 30, undefined, {
+	const empty: ContextUsageSnapshot = {
+		computedAt: new Date("2026-07-11T12:00:00Z"),
+		modelLabel: "claude-opus-4-8",
+		categories: [{ id: "context-files", label: "Instruction Files", tokens: 0 }],
+		estimatedTokens: 0,
+	};
+	const view = createView(createTheme(), { usage: empty }, () => {}, () => 30, undefined, {
 		copyText: async (text) => { copied.push(text); },
 	});
 	view.handleInput("c");
 	await settleCopy();
 	assert.deepEqual(copied, []);
 	assert.match(plainFrame(view).join("\n"), /Nothing to copy/);
+});
+
+test("UsageView clears the copy notice on the next key and stops publishing after close", async () => {
+	const pending: Array<() => void> = [];
+	let closed = false;
+	const view = createView(createTheme(), { usage: usage() }, () => { closed = true; }, () => 30, undefined, {
+		copyText: () => new Promise<void>((resolve) => pending.push(resolve)),
+	});
+	selectCategory(view, "Tool Output");
+
+	view.handleInput("c");
+	pending[0]?.();
+	await settleCopy();
+	assert.match(plainFrame(view).join("\n"), /Copied [\d,]+ chars/);
+
+	view.handleInput("j");
+	assert.doesNotMatch(plainFrame(view).join("\n"), /Copying…|Copied/);
+	view.handleInput("k");
+
+	view.handleInput("c");
+	view.handleInput("\u001b");
+	assert.ok(closed);
+	pending[1]?.();
+	await settleCopy();
+	assert.doesNotMatch(plainFrame(view).join("\n"), /Copied/);
+});
+
+test("UsageView drops the copy hint whole when the dashboard hint row is narrow", () => {
+	const view = createView(createTheme(), { usage: usage() }, () => {}, () => 30);
+	// The copy hint is optional and the Zoom hint is not, so a width that fits the
+	// rest of the row must drop the copy hint whole rather than cut "Esc Close".
+	const hints = plainFrame(view, 58).find((line) => line.includes("Navigate")) ?? "";
+	assert.match(hints, /Esc Close/);
+	assert.doesNotMatch(hints, /c Copy/);
 });

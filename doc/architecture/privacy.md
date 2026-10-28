@@ -8,16 +8,24 @@ show, and persist, and how it loads and writes its configuration.
 ### Raw Text and Message Previews
 
 Keep raw prompt and message content in this process only. Sanitize it before
-terminal rendering, and reveal it only after explicit Enter preview. Never log
-it, include it in notifications, persist extra copies, or inject it into a
-later model request. This applies to request copies, payload copies, guard
-findings, and snapshots alike: snapshots live only in memory and are never
-saved with the session.
+terminal rendering, and render it on screen only after explicit Enter preview;
+the explicit `c` copy is the one clipboard export path and is also
+user-initiated. Never log it, include it in notifications, persist extra
+copies, or inject it into a later model request. This applies to request
+copies, payload copies, guard findings, and snapshots alike: snapshots live
+only in memory and are never saved with the session.
 
 The Injections content filter reads the same text to decide which rows stay
 visible. Its sanitized, whitespace-collapsed copy lives only as long as the
 view, and rows never show the matching text; raw text still appears only in an
 opened preview.
+
+A copy command is explicit and user-initiated: `c` sanitizes the same captured
+text and hands it to the system clipboard on request, without keeping a copy
+itself. It never runs automatically, and the extension cannot verify what the
+OS clipboard retains or for how long. [UI.md](../UI.md) owns the copy
+interaction and [usage](../ui/usage.md) and [injections](../ui/injections.md)
+own what each view copies.
 
 Capture message content, not the whole message object:
 

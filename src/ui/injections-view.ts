@@ -20,13 +20,10 @@ import {
 } from "./injections-model.ts";
 import {
 	type CopyActions,
-	type CopyNotice,
 	COPY_HINT,
 	copyableJoin,
 	copyableText,
-	copiedNotice,
-	copyFailureNotice,
-	type CopyText,
+	CopyNotices,
 } from "./copy.ts";
 import { expandJsonSpan } from "./json-preview.ts";
 import {
@@ -155,9 +152,7 @@ export class InjectionsView {
 	private readonly done: (result: undefined) => void;
 	private readonly getTerminalRows: () => number;
 	private readonly wheelScrollLines: number;
-	private readonly copyText: CopyText;
-	private readonly refresh: () => void;
-	private copyNotice: CopyNotice | undefined;
+	private readonly copy: CopyNotices;
 	/** Unfiltered rows; they fix the value column so filtering never shifts it. */
 	private readonly allRows: InjectionRow[];
 	private rows: InjectionRow[];
@@ -191,8 +186,10 @@ export class InjectionsView {
 		this.done = done;
 		this.getTerminalRows = getTerminalRows;
 		this.wheelScrollLines = wheelScrollLines;
-		this.copyText = actions.copyText ?? copyToClipboard;
-		this.refresh = actions.refresh ?? (() => {});
+		this.copy = new CopyNotices(actions.copyText ?? copyToClipboard, () => {
+			this.clearCache();
+			actions.refresh?.();
+		});
 		this.allRows = buildInjectionRows(input.snapshot);
 		this.rows = this.allRows;
 		this.navigator = listNavigator(this.rows);
@@ -200,7 +197,7 @@ export class InjectionsView {
 	}
 
 	public handleInput(data: string): void {
-		this.clearCopyNotice();
+		this.copy.clear();
 		if (this.previewItem !== undefined) {
 			this.handlePreviewInput(data);
 			return;
@@ -216,7 +213,10 @@ export class InjectionsView {
 		}
 		if (matchesKey(data, Key.escape) || data === "q") {
 			if (this.filter.active) this.clearFilter();
-			else this.done(undefined);
+			else {
+				this.copy.dispose();
+				this.done(undefined);
+			}
 			return;
 		}
 		if (data === SEARCH_KEY) {
@@ -296,7 +296,7 @@ export class InjectionsView {
 		const hints = fitHintRow(theme, this.listHints(), width);
 		const tail = [
 			...(descriptionLines.length > 0 ? ["", ...descriptionLines] : []),
-			this.copyNoticeLine(width),
+			this.copy.line(this.theme, width),
 			hints,
 			"",
 			border,
@@ -465,7 +465,7 @@ export class InjectionsView {
 			[STEP_KEY_HINT, "Navigate"],
 			["Enter", "Preview"],
 			[SEARCH_KEY, "Filter", true],
-			...(this.navigator.selectableCount > 0 ? [["c", "Copy", true] as const] : []),
+			...(this.navigator.selectableCount > 0 ? [COPY_HINT] : []),
 			["Esc", this.filter.active ? "Clear" : "Close"],
 		];
 	}
@@ -517,62 +517,26 @@ export class InjectionsView {
 		}
 	}
 
-	/** Copy the highlighted list row: one item, or every item of a highlighted group. */
+	/** Copy the highlighted list row: one item, or every visible item of a highlighted group. */
 	private copyRowSelection(): void {
 		const row = this.rows[this.navigator.selected];
 		if (row?.kind === "item") {
 			const item = this.itemsById.get(row.itemId);
-			if (item !== undefined) this.copyTextValue(copyableText(item.text));
+			if (item !== undefined) this.copy.copy(copyableText(item.text));
 		} else if (row?.kind === "group") {
 			const group = this.input.snapshot.groups.find((entry) => groupKey(entry) === row.groupKey);
-			if (group !== undefined) this.copyTextValue(copyableJoin(group.items.map((item) => item.text)));
+			if (group === undefined) return;
+			// The group row counts the whole snapshot; copy only the items the filter keeps
+			const visible = new Set(this.rows.flatMap((entry) => (entry.kind === "item" ? [entry.itemId] : [])));
+			this.copy.copy(copyableJoin(
+				group.items.filter((item) => visible.has(item.id)).map((item) => item.text),
+			));
 		}
 	}
 
 	/** Copy the item open in the preview. */
 	private copyPreviewItem(): void {
-		if (this.previewItem !== undefined) this.copyTextValue(copyableText(this.previewItem.text));
-	}
-
-	/** Write one clipboard payload and keep its result in the footer until the next key. */
-	private copyTextValue(text: string): void {
-		if (text.length === 0) {
-			this.copyNotice = { text: "Nothing to copy", kind: "error" };
-			this.clearCache();
-			this.refresh();
-			return;
-		}
-		this.copyNotice = { text: "Copying…", kind: "pending" };
-		this.clearCache();
-		this.refresh();
-		void this.copyText(text).then(
-			() => {
-				this.copyNotice = copiedNotice(text);
-				this.clearCache();
-				this.refresh();
-			},
-			(error: unknown) => {
-				this.copyNotice = copyFailureNotice(error);
-				this.clearCache();
-				this.refresh();
-			},
-		);
-	}
-
-	/** Drop the last copy feedback before handling the next key. */
-	private clearCopyNotice(): void {
-		if (this.copyNotice === undefined) return;
-		this.copyNotice = undefined;
-		this.clearCache();
-	}
-
-	/** Footer spacer row, carrying the latest copy confirmation when there is one. */
-	private copyNoticeLine(width: number): string {
-		if (this.copyNotice === undefined) return "";
-		const color = this.copyNotice.kind === "error"
-			? "error"
-			: this.copyNotice.kind === "success" ? "success" : "muted";
-		return this.fit(this.theme.fg(color, `${BODY_INDENT}${normalizeInlineText(this.copyNotice.text)}`), width);
+		if (this.previewItem !== undefined) this.copy.copy(copyableText(this.previewItem.text));
 	}
 
 	/** Open the selected item; a content filter carries its query into the preview search. */
@@ -656,7 +620,7 @@ export class InjectionsView {
 
 		if (viewport.showScroll) lines.push(this.previewScrollLine(width, wrapped.length));
 		if (descriptionLines.length > 0) lines.push("", ...descriptionLines);
-		lines.push(this.copyNoticeLine(width));
+		lines.push(this.copy.line(this.theme, width));
 		lines.push(fitHintRow(this.theme, searchHints(search.prompt, "Scroll", COPY_HINT), width));
 		lines.push("", border);
 		return fitToTerminalHeight(lines, terminalRows, border);

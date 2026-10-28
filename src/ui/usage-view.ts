@@ -21,13 +21,10 @@ import { collectPreviewEntries } from "../usage.ts";
 import { colorize } from "./color.ts";
 import {
 	type CopyActions,
-	type CopyNotice,
 	COPY_HINT,
 	copyableJoin,
 	copyableText,
-	copiedNotice,
-	copyFailureNotice,
-	type CopyText,
+	CopyNotices,
 } from "./copy.ts";
 import { ListNavigator, PreviewScroller } from "./injections-model.ts";
 import { expandJsonSpan } from "./json-preview.ts";
@@ -41,7 +38,6 @@ import {
 	fitLine,
 	fitToTerminalHeight,
 	type Hint,
-	hintRow,
 	isPageBackKey,
 	isPageForwardKey,
 	isStepBackKey,
@@ -234,9 +230,7 @@ export class UsageView {
 	private readonly done: (result: undefined) => void;
 	private readonly getTerminalRows: () => number;
 	private readonly wheelScrollLines: number;
-	private readonly copyText: CopyText;
-	private readonly refresh: () => void;
-	private copyNotice: CopyNotice | undefined;
+	private readonly copy: CopyNotices;
 	private readonly usage: ContextUsageSnapshot;
 	private readonly categoryColors: CategoryColors;
 	private readonly legendRows: readonly LegendRow[];
@@ -274,8 +268,10 @@ export class UsageView {
 		this.done = done;
 		this.getTerminalRows = getTerminalRows;
 		this.wheelScrollLines = wheelScrollLines;
-		this.copyText = actions.copyText ?? copyToClipboard;
-		this.refresh = actions.refresh ?? (() => {});
+		this.copy = new CopyNotices(actions.copyText ?? copyToClipboard, () => {
+			this.clearCache();
+			actions.refresh?.();
+		});
 		this.usage = input.usage;
 		this.categoryColors = input.categoryColors;
 		this.fitMapScale = calculateFitMapScale(this.usage);
@@ -287,7 +283,7 @@ export class UsageView {
 
 	/** Handle category navigation, preview opening, and close keys. */
 	public handleInput(data: string): void {
-		this.clearCopyNotice();
+		this.copy.clear();
 		if (this.previewRow !== undefined) {
 			// Route on the same predicate the renderer uses, so keys always target the visible level
 			const blockStream = this.getFullContentEntry(this.previewRow) === undefined;
@@ -300,6 +296,7 @@ export class UsageView {
 			return;
 		}
 		if (matchesKey(data, Key.escape) || data === "q") {
+			this.copy.dispose();
 			this.done(undefined);
 			return;
 		}
@@ -382,11 +379,8 @@ export class UsageView {
 		while (dashboard.length < dashboardRows) dashboard.push("");
 		const tail = [
 			...(descriptionLines.length === 0 ? [] : ["", ...descriptionLines]),
-			this.copyNoticeLine(width),
-			this.fit(
-				hintRow(theme, this.dashboardHints(width)),
-				width,
-			),
+			this.copy.line(this.theme, width),
+			fitHintRow(theme, this.dashboardHints(width), width),
 			"",
 			border,
 		];
@@ -891,7 +885,7 @@ export class UsageView {
 	private copyDashboardSelection(): void {
 		const row = this.legendRows[this.navigator.selected];
 		if (row?.type !== "category") return;
-		this.copyTextValue(copyableJoin(collectPreviewEntries(row.category).map((entry) => entry.text)));
+		this.copy.copy(copyableJoin(collectPreviewEntries(row.category).map((entry) => entry.text)));
 	}
 
 	/** Copy the highlighted block of the open category stream. */
@@ -899,7 +893,7 @@ export class UsageView {
 		const row = this.previewRow;
 		if (row === undefined) return;
 		const entry = this.previewEntries(row)[this.blockNavigator.selected];
-		if (entry !== undefined) this.copyTextValue(copyableText(entry.text));
+		if (entry !== undefined) this.copy.copy(copyableText(entry.text));
 	}
 
 	/** Copy the open entry when the category or block already shows its full content. */
@@ -907,48 +901,7 @@ export class UsageView {
 		const row = this.previewRow;
 		if (row === undefined) return;
 		const entry = this.getFullContentEntry(row);
-		if (entry !== undefined) this.copyTextValue(copyableText(entry.text));
-	}
-
-	/** Write one clipboard payload and keep its result in the footer until the next key. */
-	private copyTextValue(text: string): void {
-		if (text.length === 0) {
-			this.copyNotice = { text: "Nothing to copy", kind: "error" };
-			this.clearCache();
-			this.refresh();
-			return;
-		}
-		this.copyNotice = { text: "Copying…", kind: "pending" };
-		this.clearCache();
-		this.refresh();
-		void this.copyText(text).then(
-			() => {
-				this.copyNotice = copiedNotice(text);
-				this.clearCache();
-				this.refresh();
-			},
-			(error: unknown) => {
-				this.copyNotice = copyFailureNotice(error);
-				this.clearCache();
-				this.refresh();
-			},
-		);
-	}
-
-	/** Drop the last copy feedback before handling the next key. */
-	private clearCopyNotice(): void {
-		if (this.copyNotice === undefined) return;
-		this.copyNotice = undefined;
-		this.clearCache();
-	}
-
-	/** Footer spacer row, carrying the latest copy confirmation when there is one. */
-	private copyNoticeLine(width: number): string {
-		if (this.copyNotice === undefined) return "";
-		const color = this.copyNotice.kind === "error"
-			? "error"
-			: this.copyNotice.kind === "success" ? "success" : "muted";
-		return this.fit(this.theme.fg(color, `${BODY_INDENT}${normalizeInlineText(this.copyNotice.text)}`), width);
+		if (entry !== undefined) this.copy.copy(copyableText(entry.text));
 	}
 
 	/** Open the selected category, bypassing blocks when it has exactly one entry. */
@@ -1050,7 +1003,7 @@ export class UsageView {
 			);
 		}
 		if (descriptionLines.length > 0) lines.push("", ...descriptionLines);
-		lines.push(this.copyNoticeLine(width));
+		lines.push(this.copy.line(this.theme, width));
 		lines.push(fitHintRow(theme, this.streamHints(stream.blocks.length), width));
 		lines.push("", border);
 		return fitToTerminalHeight(lines, terminalRows, border);
@@ -1138,7 +1091,7 @@ export class UsageView {
 			);
 		}
 		if (descriptionLines.length > 0) lines.push("", ...descriptionLines);
-		lines.push(this.copyNoticeLine(width));
+		lines.push(this.copy.line(this.theme, width));
 		lines.push(fitHintRow(theme, searchHints(this.search.prompt, "Scroll", COPY_HINT), width));
 		lines.push("", border);
 		return fitToTerminalHeight(lines, terminalRows, border);

@@ -4,6 +4,7 @@
 
 ### New
 * `[views]` Add `c` to copy highlighted categories, rows, blocks, and previews.
+* `[views]` Copy only the visible rows an Injections filter shows.
 
 ## `[v0.8.1]` - 26.10.2026
 

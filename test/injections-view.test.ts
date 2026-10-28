@@ -2319,3 +2319,46 @@ test("InjectionsView reports an empty item without writing the clipboard", async
 	assert.deepEqual(copied, []);
 	assert.match(plainFrame(view).join("\n"), /Nothing to copy/);
 });
+
+test("InjectionsView copies only the visible items of a filtered group", async () => {
+	const copied: string[] = [];
+	const view = createView(8, undefined, () => 24, { copyText: async (text) => { copied.push(text); } });
+
+	// Submit a name filter that keeps one item, then return to the group row.
+	view.handleInput("/");
+	typeKeys(view, "pi-3");
+	view.handleInput("\r");
+	view.handleInput("\u001b");
+	view.handleInput("k");
+	view.handleInput("c");
+	await settleCopy();
+
+	assert.equal(copied[0]?.split("\n\n").length, 1);
+	assert.match(copied[0] ?? "", /^pi-3 preview line 0/);
+});
+
+test("InjectionsView stops publishing a copy result after close", async () => {
+	let closed = false;
+	const pending: Array<() => void> = [];
+	const view = new InjectionsView(createTheme(), { snapshot: snapshot(8) }, () => { closed = true; }, () => 24, undefined, {
+		copyText: () => new Promise<void>((resolve) => pending.push(resolve)),
+	});
+	view.handleInput("c");
+	view.handleInput("\u001b");
+	assert.ok(closed);
+	pending[0]?.();
+	await settleCopy();
+	assert.doesNotMatch(plainFrame(view).join("\n"), /Copied/);
+});
+
+test("InjectionsView keeps a cleared notice cleared when a copy resolves late", async () => {
+	const pending: Array<() => void> = [];
+	const view = createView(8, undefined, () => 24, {
+		copyText: () => new Promise<void>((resolve) => pending.push(resolve)),
+	});
+	view.handleInput("c");
+	view.handleInput("j");
+	pending[0]?.();
+	await settleCopy();
+	assert.doesNotMatch(plainFrame(view).join("\n"), /Copied/);
+});
