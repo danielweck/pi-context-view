@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### New
+* `[views]` Add `c` to copy highlighted categories, rows, blocks, and previews.
+* `[views]` Copy only the visible rows an Injections filter shows.
+
 ## `[v0.8.1]` - 26.10.2026
 
 Maintenance release with support for Pi 1.4.0 and a few small fixes.
@@ -10,7 +16,6 @@ Maintenance release with support for Pi 1.4.0 and a few small fixes.
 ### Fixed
 * `[capture]` Match Pi 1.4's Responses `additional_tools` declarations and tool notices.
 * `[injections]` Keep the selected group when clearing a filter, even if labels repeat.
-
 
 ## `[v0.8.0]` - 24.10.2026
 
