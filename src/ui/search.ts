@@ -154,7 +154,7 @@ export function isSearchNavigationKey(data: string): boolean {
  * `extra` sits before the closing hint; both views pass their copy action.
  */
 export function searchHints(prompt: SearchPrompt, stepLabel: string, extra?: Hint): Hint[] {
-	const close: Hint[] = [extra === undefined ? ["Esc", "Back"] : extra, ["Esc", "Back"]];
+	const close: Hint[] = extra === undefined ? [["Esc", "Back"]] : [extra, ["Esc", "Back"]];
 	if (prompt.editing) return [["↑↓", stepLabel], ["Enter", "Done"], ["Esc", "Clear"]];
 	if (prompt.active) {
 		return [
