@@ -132,6 +132,7 @@ export async function showInjectionsView(
 			return {
 				render: (width: number) => view.render(width),
 				invalidate: () => view.invalidate(),
+				dispose: () => view.dispose(),
 				handleInput: (data: string) => {
 					view.handleInput(data);
 					tui.requestRender();
@@ -214,7 +215,7 @@ export class InjectionsView {
 		if (matchesKey(data, Key.escape) || data === "q") {
 			if (this.filter.active) this.clearFilter();
 			else {
-				this.copy.dispose();
+				this.dispose();
 				this.done(undefined);
 			}
 			return;
@@ -319,6 +320,11 @@ export class InjectionsView {
 	public invalidate(): void {
 		this.clearPreviewContent();
 		this.clearCache();
+	}
+
+	/** Stop pending copies from redrawing once the overlay closes, however it closes. */
+	public dispose(): void {
+		this.copy.dispose();
 	}
 
 	// === List filter ===

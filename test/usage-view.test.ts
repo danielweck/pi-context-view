@@ -1945,6 +1945,23 @@ test("UsageView clears the copy notice on the next key and stops publishing afte
 	assert.doesNotMatch(plainFrame(view).join("\n"), /Copied/);
 });
 
+test("UsageView stops redrawing a copy result after the host disposes it", async () => {
+	const pending: Array<() => void> = [];
+	let refreshes = 0;
+	const view = createView(createTheme(), { usage: usage() }, () => {}, () => 30, undefined, {
+		copyText: () => new Promise<void>((resolve) => pending.push(resolve)),
+		refresh: () => { refreshes++; },
+	});
+	selectCategory(view, "Tool Output");
+	view.handleInput("c");
+	view.dispose();
+	const refreshesAtDispose = refreshes;
+	pending[0]?.();
+	await settleCopy();
+	assert.equal(refreshes, refreshesAtDispose);
+	assert.doesNotMatch(plainFrame(view).join("\n"), /Copied/);
+});
+
 test("UsageView drops the copy hint whole when the dashboard hint row is narrow", () => {
 	const view = createView(createTheme(), { usage: usage() }, () => {}, () => 30);
 	// The copy hint is optional and the Zoom hint is not, so a width that fits the

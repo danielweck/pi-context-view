@@ -2351,6 +2351,22 @@ test("InjectionsView stops publishing a copy result after close", async () => {
 	assert.doesNotMatch(plainFrame(view).join("\n"), /Copied/);
 });
 
+test("InjectionsView stops redrawing a copy result after the host disposes it", async () => {
+	const pending: Array<() => void> = [];
+	let refreshes = 0;
+	const view = createView(8, undefined, () => 24, {
+		copyText: () => new Promise<void>((resolve) => pending.push(resolve)),
+		refresh: () => { refreshes++; },
+	});
+	view.handleInput("c");
+	view.dispose();
+	const refreshesAtDispose = refreshes;
+	pending[0]?.();
+	await settleCopy();
+	assert.equal(refreshes, refreshesAtDispose);
+	assert.doesNotMatch(plainFrame(view).join("\n"), /Copied/);
+});
+
 test("InjectionsView keeps a cleared notice cleared when a copy resolves late", async () => {
 	const pending: Array<() => void> = [];
 	const view = createView(8, undefined, () => 24, {

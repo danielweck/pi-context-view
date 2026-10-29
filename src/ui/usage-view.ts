@@ -4,7 +4,12 @@
  * rows, direct uncapped content for single-entry categories, and chronological
  * block streams with opt-in full content for multi-entry categories.
  */
-import { copyToClipboard, type ExtensionCommandContext, type Theme, type ThemeColor } from "@earendil-works/pi-coding-agent";
+import {
+	copyToClipboard,
+	type ExtensionCommandContext,
+	type Theme,
+	type ThemeColor,
+} from "@earendil-works/pi-coding-agent";
 import { Key, matchesKey, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 
 import {
@@ -210,6 +215,7 @@ export async function showUsageView(context: ExtensionCommandContext, input: Usa
 			return {
 				render: (width: number) => view.render(width),
 				invalidate: () => view.invalidate(),
+				dispose: () => view.dispose(),
 				handleInput: (data: string) => {
 					view.handleInput(data);
 					tui.requestRender();
@@ -296,7 +302,7 @@ export class UsageView {
 			return;
 		}
 		if (matchesKey(data, Key.escape) || data === "q") {
-			this.copy.dispose();
+			this.dispose();
 			this.done(undefined);
 			return;
 		}
@@ -352,6 +358,11 @@ export class UsageView {
 	public invalidate(): void {
 		this.clearPreviewContent();
 		this.clearCache();
+	}
+
+	/** Stop pending copies from redrawing once the overlay closes, however it closes. */
+	public dispose(): void {
+		this.copy.dispose();
 	}
 
 	/** Render the dashboard, a multi-entry block stream, or one entry's full content. */
