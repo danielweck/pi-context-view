@@ -11,7 +11,7 @@ const TERMINAL_ESCAPE_SEQUENCE = /\u001B[\u0020-\u002F]*[\u0030-\u007E]/g;
 const TERMINAL_CONTROL_CHARACTER = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g;
 
 /** Normalize line endings and remove terminal control sequences, keeping tabs and spacing. */
-export function normalizeClipboardText(text: string): string {
+export function normalizeMultilineText(text: string): string {
 	const normalized = text
 		.replaceAll("\r\n", "\n")
 		.replaceAll("\r", "\n");
@@ -23,7 +23,7 @@ export function normalizeClipboardText(text: string): string {
 
 /** Normalize whitespace and remove terminal control sequences from raw preview text. */
 export function normalizePreviewText(text: string): string {
-	return normalizeClipboardText(text).replaceAll("\t", "    ");
+	return normalizeMultilineText(text).replaceAll("\t", "    ");
 }
 
 /** Remove complete terminal strings without rescanning an unterminated suffix for every start. */

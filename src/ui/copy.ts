@@ -4,9 +4,9 @@
  * sequences are stripped, while tabs, spacing, and characters are kept; only
  * preview-added wrapping, gutters, subheaders, and JSON expansion stay out.
  */
-import type { Theme } from "@earendil-works/pi-coding-agent";
+import { copyToClipboard, type Theme } from "@earendil-works/pi-coding-agent";
 
-import { normalizeClipboardText, normalizeInlineText } from "../text.ts";
+import { normalizeInlineText, normalizeMultilineText } from "../text.ts";
 import { BODY_INDENT, fitLine, type Hint } from "./layout.ts";
 
 /** Hint-row entry advertising the copy action; it is optional, so narrow rows drop it whole. */
@@ -17,6 +17,7 @@ export type CopyText = (text: string) => Promise<void>;
 
 /** View hooks around a copy: how text reaches the clipboard and how to redraw its confirmation. */
 export interface CopyActions {
+	/** Clipboard writer; defaults to pi's `copyToClipboard`. */
 	readonly copyText?: CopyText;
 	/** Request a redraw after an asynchronous clipboard result. */
 	readonly refresh?: () => void;
@@ -30,7 +31,7 @@ export interface CopyNotice {
 
 /** Clean captured text for the clipboard without changing tabs, spacing, or characters. */
 export function copyableText(text: string): string {
-	return normalizeClipboardText(text).replace(/^\n+/, "").trimEnd();
+	return normalizeMultilineText(text).replace(/^\n+/, "").trimEnd();
 }
 
 /** Join several captured texts with one blank line, dropping empty pieces. */
@@ -64,7 +65,7 @@ export class CopyNotices {
 	private disposed = false;
 	private notice: CopyNotice | undefined;
 
-	public constructor(copyText: CopyText, refresh: () => void = () => {}) {
+	public constructor(copyText: CopyText = copyToClipboard, refresh: () => void = () => {}) {
 		this.copyText = copyText;
 		this.refresh = refresh;
 	}
@@ -112,13 +113,6 @@ export class CopyNotices {
 		);
 	}
 
-	/** Publish a result only while its request is still the newest one. */
-	private settle(sequence: number, notice: CopyNotice): void {
-		if (sequence !== this.sequence) return;
-		this.notice = notice;
-		this.refresh();
-	}
-
 	/** Footer spacer row carrying the latest confirmation; empty while there is none. */
 	public line(theme: Theme, width: number): string {
 		if (this.notice === undefined) return "";
@@ -126,5 +120,12 @@ export class CopyNotices {
 			? "error"
 			: this.notice.kind === "success" ? "success" : "muted";
 		return fitLine(theme.fg(color, `${BODY_INDENT}${normalizeInlineText(this.notice.text)}`), width);
+	}
+
+	/** Publish a result only while its request is still the newest one. */
+	private settle(sequence: number, notice: CopyNotice): void {
+		if (sequence !== this.sequence) return;
+		this.notice = notice;
+		this.refresh();
 	}
 }

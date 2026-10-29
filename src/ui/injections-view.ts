@@ -2,7 +2,7 @@
  * Focused `/context injections` view: hierarchical rows of the latest request
  * snapshot. The Runtime label stays hidden until the runtime-inspection roadmap step.
  */
-import { copyToClipboard, type ExtensionCommandContext, type Theme } from "@earendil-works/pi-coding-agent";
+import type { ExtensionCommandContext, Theme } from "@earendil-works/pi-coding-agent";
 import { Key, matchesKey, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 
 import type { InjectionItem, InjectionSnapshot, TokenDiff } from "../model.ts";
@@ -187,7 +187,7 @@ export class InjectionsView {
 		this.done = done;
 		this.getTerminalRows = getTerminalRows;
 		this.wheelScrollLines = wheelScrollLines;
-		this.copy = new CopyNotices(actions.copyText ?? copyToClipboard, () => {
+		this.copy = new CopyNotices(actions.copyText, () => {
 			this.clearCache();
 			actions.refresh?.();
 		});

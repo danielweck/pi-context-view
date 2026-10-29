@@ -4,12 +4,7 @@
  * rows, direct uncapped content for single-entry categories, and chronological
  * block streams with opt-in full content for multi-entry categories.
  */
-import {
-	copyToClipboard,
-	type ExtensionCommandContext,
-	type Theme,
-	type ThemeColor,
-} from "@earendil-works/pi-coding-agent";
+import type { ExtensionCommandContext, Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
 import { Key, matchesKey, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 
 import {
@@ -274,7 +269,7 @@ export class UsageView {
 		this.done = done;
 		this.getTerminalRows = getTerminalRows;
 		this.wheelScrollLines = wheelScrollLines;
-		this.copy = new CopyNotices(actions.copyText ?? copyToClipboard, () => {
+		this.copy = new CopyNotices(actions.copyText, () => {
 			this.clearCache();
 			actions.refresh?.();
 		});
@@ -480,7 +475,7 @@ export class UsageView {
 			[STEP_KEY_HINT, "Navigate"],
 			["Enter", "Preview"],
 		];
-		if (this.legendRows[this.navigator.selected]?.type === "category") hints.push(["c", "Copy", true]);
+		if (this.legendRows[this.navigator.selected]?.type === "category") hints.push(COPY_HINT);
 		if (this.canToggleMapScale(width)) hints.push(["Z", "Zoom"]);
 		hints.push(["Esc", "Close"]);
 		return hints;
