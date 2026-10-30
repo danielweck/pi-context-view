@@ -271,31 +271,31 @@ export class UsageView {
 		this.navigator = new ListNavigator(this.legendRows.length, 1, selectableCount);
 	}
 
-    public handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
-        if (event.type !== "wheel" || !event.wheelDelta) {
-            return undefined;
-        }
-        const wheel = event.wheelDelta > 0 ? 1 : -1;
+	public handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
+		if (event.type !== "wheel" || !event.wheelDelta) {
+			return undefined;
+		}
+		const wheel = event.wheelDelta > 0 ? 1 : -1;
 
-        if (!!this.previewRow) {
-            const blockStream = this.getFullContentEntry(this.previewRow) === undefined;
-            if (blockStream) {
-                const moved = wheel < 0 ? this.blockNavigator.stepBack() : this.blockNavigator.stepForward();
-                if (moved) {
-                    this.clearCache();
-                }
-            } else {
-                if (this.previewScroller.scrollBy(wheel * this.wheelScrollLines)) {
-                    this.clearCache();
-                }
-            }
-        } else {
-            if (this.navigator.moveBy(wheel)) {
-                this.clearCache();
-            }
-        }
-        return { handled: true };
-    }
+		if (!!this.previewRow) {
+			const blockStream = this.getFullContentEntry(this.previewRow) === undefined;
+			if (blockStream) {
+				const moved = wheel < 0 ? this.blockNavigator.stepBack() : this.blockNavigator.stepForward();
+				if (moved) {
+					this.clearCache();
+				}
+			} else {
+				if (this.previewScroller.scrollBy(wheel * this.wheelScrollLines)) {
+					this.clearCache();
+				}
+			}
+		} else {
+			if (this.navigator.moveBy(wheel)) {
+				this.clearCache();
+			}
+		}
+		return { handled: true };
+	}
 
 	/** Handle category navigation, preview opening, and close keys. */
 	public handleInput(data: string): void {

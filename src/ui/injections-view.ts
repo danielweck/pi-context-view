@@ -184,23 +184,23 @@ export class InjectionsView {
 		this.itemsById = collectItemsById(input.snapshot);
 	}
 
-    public handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
-        if (event.type !== "wheel" || !event.wheelDelta) {
-            return undefined;
-        }
-        const wheel = event.wheelDelta > 0 ? 1 : -1;
+	public handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
+		if (event.type !== "wheel" || !event.wheelDelta) {
+			return undefined;
+		}
+		const wheel = event.wheelDelta > 0 ? 1 : -1;
 
-        if (!!this.previewItem) {
-            if (this.previewScroller.scrollBy(wheel * this.wheelScrollLines)) {
-                this.clearCache();
-            }
-        } else {
-            if (this.navigator.moveBy(wheel)) {
-                this.clearCache();
-            }
-        }
-        return { handled: true };
-    }
+		if (!!this.previewItem) {
+			if (this.previewScroller.scrollBy(wheel * this.wheelScrollLines)) {
+				this.clearCache();
+			}
+		} else {
+			if (this.navigator.moveBy(wheel)) {
+				this.clearCache();
+			}
+		}
+		return { handled: true };
+	}
 
 	public handleInput(data: string): void {
 		if (this.previewItem !== undefined) {
