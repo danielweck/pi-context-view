@@ -141,8 +141,7 @@ export function matchStepDirection(data: string): -1 | 1 | undefined {
  * the page keys, and the wheel. Letter keys such as `j`/`k` type instead.
  */
 export function isSearchNavigationKey(data: string): boolean {
-	return
-		matchesKey(data, Key.up) ||
+	return matchesKey(data, Key.up) ||
 		matchesKey(data, Key.down) ||
 		matchesKey(data, Key.pageUp) ||
 		matchesKey(data, Key.pageDown);
