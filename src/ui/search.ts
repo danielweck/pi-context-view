@@ -19,7 +19,6 @@ import {
 
 import { normalizeInlineText, normalizePreviewText } from "../text.ts";
 import { BODY_INDENT, fitLine, type Hint, spreadLine, STEP_KEY_HINT } from "./layout.ts";
-//import { parseWheelDirection } from "./wheel.ts";
 
 /** Hint-row key label that opens the search prompt in either view. */
 export const SEARCH_KEY = "/";
@@ -143,7 +142,6 @@ export function matchStepDirection(data: string): -1 | 1 | undefined {
  */
 export function isSearchNavigationKey(data: string): boolean {
 	return
-// parseWheelDirection(data) !== undefined ||
 		matchesKey(data, Key.up) ||
 		matchesKey(data, Key.down) ||
 		matchesKey(data, Key.pageUp) ||

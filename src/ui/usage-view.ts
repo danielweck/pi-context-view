@@ -55,7 +55,7 @@ import { previewBodyLines, previewLegendLines } from "./section-preview.ts";
 import { splitSkillPreview } from "./skill-preview.ts";
 import { buildUsageMap, calculateFitMapScale, type UsageMap, type UsageMapCell } from "./usage-map.ts";
 import { BlockNavigator, layoutPreviewBlocks, type PreviewLayout } from "./usage-preview.ts";
-import { DEFAULT_WHEEL_SCROLL_LINES, /* parseWheelDirection,*/ readWheelScrollLines } from "./wheel.ts";
+import { DEFAULT_WHEEL_SCROLL_LINES, readWheelScrollLines } from "./wheel.ts";
 
 /** Dashboard rows below the content, excluding the collapsible description: blank, hints, blank, border. */
 const USAGE_TAIL_FIXED_LINE_COUNT = 4;
@@ -314,12 +314,7 @@ export class UsageView {
 			this.done(undefined);
 			return;
 		}
-		// One notch moves the selection one row, like a single step key
-		// const wheel = parseWheelDirection(data);
-		// if (wheel !== undefined) {
-		// 	if (this.navigator.moveBy(wheel)) this.clearCache();
-		// 	return;
-		// }
+
 		if (matchesKey(data, "z")) {
 			this.toggleMapScale();
 		} else if (matchesKey(data, Key.enter)) {
@@ -833,13 +828,7 @@ export class UsageView {
 			const anchor = this.cachedStreamSearch?.starts[this.blockNavigator.selected] ?? 0;
 			if (this.handleSearchKey(data, anchor)) return;
 		}
-		// Blocks are selected rather than scrolled, so one notch steps one block
-		// const wheel = parseWheelDirection(data);
-		// if (wheel !== undefined) {
-		// 	const moved = wheel < 0 ? this.blockNavigator.stepBack() : this.blockNavigator.stepForward();
-		// 	if (moved) this.clearCache();
-		// 	return;
-		// }
+
 		if (matchesKey(data, Key.enter)) {
 			this.openBlock();
 		} else if (isStepBackKey(data)) {
@@ -865,11 +854,7 @@ export class UsageView {
 			return;
 		}
 		if (this.handleSearchKey(data, this.previewScroller.offset)) return;
-		// const wheel = parseWheelDirection(data);
-		// if (wheel !== undefined) {
-		// 	if (this.previewScroller.scrollBy(wheel * this.wheelScrollLines)) this.clearCache();
-		// 	return;
-		// }
+
 		if (isStepBackKey(data)) {
 			if (this.previewScroller.scrollBy(-1)) this.clearCache();
 		} else if (isStepForwardKey(data)) {

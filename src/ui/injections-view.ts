@@ -63,7 +63,7 @@ import {
 } from "./search.ts";
 import { previewBodyLines, previewLegendLines } from "./section-preview.ts";
 import { statusBarLines } from "./status-bar.ts";
-import { DEFAULT_WHEEL_SCROLL_LINES, /* parseWheelDirection,*/ readWheelScrollLines } from "./wheel.ts";
+import { DEFAULT_WHEEL_SCROLL_LINES, readWheelScrollLines } from "./wheel.ts";
 
 /**
  * List frame rows excluding the status bar and the collapsible description:
@@ -223,12 +223,7 @@ export class InjectionsView {
 			this.clearCache();
 			return;
 		}
-		// One notch moves the selection one row, like a single step key
-		// const wheel = parseWheelDirection(data);
-		// if (wheel !== undefined) {
-		// 	if (this.navigator.moveBy(wheel)) this.clearCache();
-		// 	return;
-		// }
+
 		if (matchesKey(data, Key.enter)) {
 			this.openPreview();
 		} else if (isStepBackKey(data)) {
@@ -484,11 +479,7 @@ export class InjectionsView {
 			if (this.previewSearch.step(matchStep)) this.clearCache();
 			return;
 		}
-		// const wheel = parseWheelDirection(data);
-		// if (wheel !== undefined) {
-		// 	if (this.previewScroller.scrollBy(wheel * this.wheelScrollLines)) this.clearCache();
-		// 	return;
-		// }
+
 		if (isStepBackKey(data)) {
 			if (this.previewScroller.scrollBy(-1)) this.clearCache();
 		} else if (isStepForwardKey(data)) {
