@@ -12,11 +12,19 @@ import {
 	buildInjectionRows,
 	collectItemsById,
 	filterInjections,
+	groupKey,
 	type InjectionFilterMode,
 	type InjectionRow,
 	ListNavigator,
 	PreviewScroller,
 } from "./injections-model.ts";
+import {
+	type CopyActions,
+	COPY_HINT,
+	copyableJoin,
+	copyableText,
+	CopyNotices,
+} from "./copy.ts";
 import { expandJsonSpan } from "./json-preview.ts";
 import {
 	BODY_INDENT,
@@ -118,10 +126,13 @@ export async function showInjectionsView(
 ): Promise<void> {
 	await context.ui.custom<void>(
 		(tui, theme, _keybindings, done) => {
-			const view = new InjectionsView(theme, input, done, () => tui.terminal.rows, readWheelScrollLines(tui));
+			const view = new InjectionsView(theme, input, done, () => tui.terminal.rows, readWheelScrollLines(tui), {
+				refresh: () => tui.requestRender(),
+			});
 			return {
 				render: (width: number) => view.render(width),
 				invalidate: () => view.invalidate(),
+				dispose: () => view.dispose(),
 				handleInput: (data: string) => {
 					view.handleInput(data);
 					tui.requestRender();
@@ -146,6 +157,7 @@ export class InjectionsView {
 	private readonly done: (result: undefined) => void;
 	private readonly getTerminalRows: () => number;
 	private readonly wheelScrollLines: number;
+	private readonly copy: CopyNotices;
 	/** Unfiltered rows; they fix the value column so filtering never shifts it. */
 	private readonly allRows: InjectionRow[];
 	private rows: InjectionRow[];
@@ -172,12 +184,17 @@ export class InjectionsView {
 		done: (result: undefined) => void,
 		getTerminalRows: () => number = () => process.stdout.rows ?? DEFAULT_TERMINAL_ROWS,
 		wheelScrollLines: number = DEFAULT_WHEEL_SCROLL_LINES,
+		actions: CopyActions = {},
 	) {
 		this.theme = theme;
 		this.input = input;
 		this.done = done;
 		this.getTerminalRows = getTerminalRows;
 		this.wheelScrollLines = wheelScrollLines;
+		this.copy = new CopyNotices(actions.copyText, () => {
+			this.clearCache();
+			actions.refresh?.();
+		});
 		this.allRows = buildInjectionRows(input.snapshot);
 		this.rows = this.allRows;
 		this.navigator = listNavigator(this.rows);
@@ -203,6 +220,7 @@ export class InjectionsView {
 	}
 
 	public handleInput(data: string): void {
+		this.copy.clear();
 		if (this.previewItem !== undefined) {
 			this.handlePreviewInput(data);
 			return;
@@ -212,9 +230,16 @@ export class InjectionsView {
 			this.handleFilterInput(data);
 			return;
 		}
+		if (matchesKey(data, "c")) {
+			this.copyRowSelection();
+			return;
+		}
 		if (matchesKey(data, Key.escape) || data === "q") {
 			if (this.filter.active) this.clearFilter();
-			else this.done(undefined);
+			else {
+				this.dispose();
+				this.done(undefined);
+			}
 			return;
 		}
 		if (data === SEARCH_KEY) {
@@ -287,7 +312,13 @@ export class InjectionsView {
 		lines.push("", total);
 		if (statusLines.length > 0) lines.push("", ...statusLines);
 		const hints = fitHintRow(theme, this.listHints(), width);
-		const tail = [...(descriptionLines.length > 0 ? ["", ...descriptionLines] : []), "", hints, "", border];
+		const tail = [
+			...(descriptionLines.length > 0 ? ["", ...descriptionLines] : []),
+			this.copy.line(this.theme, width),
+			hints,
+			"",
+			border,
+		];
 		// Fill the terminal so the overlay hides the chat, keeping the list, total, and bar together
 		while (lines.length + tail.length < terminalRows) lines.push("");
 		lines.push(...tail);
@@ -306,6 +337,11 @@ export class InjectionsView {
 	public invalidate(): void {
 		this.clearPreviewContent();
 		this.clearCache();
+	}
+
+	/** Stop pending copies from redrawing once the overlay closes, however it closes. */
+	public dispose(): void {
+		this.copy.dispose();
 	}
 
 	// === List filter ===
@@ -452,6 +488,7 @@ export class InjectionsView {
 			[STEP_KEY_HINT, "Navigate"],
 			["Enter", "Preview"],
 			[SEARCH_KEY, "Filter", true],
+			...(this.navigator.selectableCount > 0 ? [COPY_HINT] : []),
 			["Esc", this.filter.active ? "Clear" : "Close"],
 		];
 	}
@@ -463,6 +500,10 @@ export class InjectionsView {
 		if (this.previewSearch.prompt.editing && !isSearchNavigationKey(data)) {
 			this.previewSearch.handlePromptKey(data);
 			this.clearCache();
+			return;
+		}
+		if (matchesKey(data, "c")) {
+			this.copyPreviewItem();
 			return;
 		}
 		if (matchesKey(data, Key.escape) || data === "q") {
@@ -493,6 +534,28 @@ export class InjectionsView {
 		} else if (matchesKey(data, Key.end)) {
 			if (this.previewScroller.scrollTo(this.previewScroller.maxOffset)) this.clearCache();
 		}
+	}
+
+	/** Copy the highlighted list row: one item, or every visible item of a highlighted group. */
+	private copyRowSelection(): void {
+		const row = this.rows[this.navigator.selected];
+		if (row?.kind === "item") {
+			const item = this.itemsById.get(row.itemId);
+			if (item !== undefined) this.copy.copy(copyableText(item.text));
+		} else if (row?.kind === "group") {
+			const group = this.input.snapshot.groups.find((entry) => groupKey(entry) === row.groupKey);
+			if (group === undefined) return;
+			// The group row counts the whole snapshot; copy only the items the filter keeps
+			const visible = new Set(this.rows.flatMap((entry) => (entry.kind === "item" ? [entry.itemId] : [])));
+			this.copy.copy(copyableJoin(
+				group.items.filter((item) => visible.has(item.id)).map((item) => item.text),
+			));
+		}
+	}
+
+	/** Copy the item open in the preview. */
+	private copyPreviewItem(): void {
+		if (this.previewItem !== undefined) this.copy.copy(copyableText(this.previewItem.text));
 	}
 
 	/** Open the selected item; a content filter carries its query into the preview search. */
@@ -576,8 +639,8 @@ export class InjectionsView {
 
 		if (viewport.showScroll) lines.push(this.previewScrollLine(width, wrapped.length));
 		if (descriptionLines.length > 0) lines.push("", ...descriptionLines);
-		lines.push("");
-		lines.push(fitHintRow(this.theme, searchHints(search.prompt, "Scroll"), width));
+		lines.push(this.copy.line(this.theme, width));
+		lines.push(fitHintRow(this.theme, searchHints(search.prompt, "Scroll", COPY_HINT), width));
 		lines.push("", border);
 		return fitToTerminalHeight(lines, terminalRows, border);
 	}

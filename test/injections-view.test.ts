@@ -7,6 +7,7 @@ import { visibleWidth } from "@earendil-works/pi-tui";
 import { AGGREGATE_SOURCE, type InjectionSnapshot, type InjectionGroup, type InjectionItem } from "../src/model.ts";
 import type { GuardResult } from "../src/snapshot.ts";
 import { InjectionsView } from "../src/ui/injections-view.ts";
+import type { CopyActions } from "../src/ui/copy.ts";
 import { previewBodyLines } from "../src/ui/section-preview.ts";
 import { buildInjectionRows } from "../src/ui/injections-model.ts";
 import { statusBarLines } from "../src/ui/status-bar.ts";
@@ -74,12 +75,15 @@ function createView(
 	itemsPerGroup = 8,
 	degradedReason?: string,
 	getTerminalRows: () => number = () => 24,
+	actions?: CopyActions,
 ): InjectionsView {
 	return new InjectionsView(
 		createTheme(),
 		{ snapshot: snapshot(itemsPerGroup), degradedReason },
 		() => {},
 		getTerminalRows,
+		undefined,
+		actions,
 	);
 }
 
@@ -2057,7 +2061,7 @@ test("InjectionsView filters rows by name, keeps ancestors, and Escape steps bac
 	const view = new InjectionsView(theme, { snapshot: searchSnapshot() }, () => {
 		closed = true;
 	}, () => 30);
-	assert.match(plainFrame(view).join("\n"), /↑↓\/jk Navigate · Enter Preview · \/ Filter · Esc Close/);
+	assert.match(plainFrame(view).join("\n"), /↑↓\/jk Navigate · Enter Preview · \/ Filter · c Copy · Esc Close/);
 
 	view.handleInput("/");
 	let plain = plainFrame(view);
@@ -2083,7 +2087,7 @@ test("InjectionsView filters rows by name, keeps ancestors, and Escape steps bac
 	view.handleInput("\u001b");
 	plain = plainFrame(view);
 	assert.match(plain[promptIndex] ?? "", /^ {2}◉ Name \| ○ Content > cym +1 match$/);
-	assert.match(plain.join("\n"), /↑↓\/jk Navigate · Enter Preview · \/ Filter · Esc Clear/);
+	assert.match(plain.join("\n"), /↑↓\/jk Navigate · Enter Preview · \/ Filter · c Copy · Esc Clear/);
 
 	// Escape drops the filter but keeps the selected row, then closes the view
 	view.handleInput("\u001b");
@@ -2177,7 +2181,7 @@ test("InjectionsView content filter carries its query into the preview search", 
 	assert.ok(matchRow > 0);
 	assert.ok((lines[matchRow] ?? "").includes(SEARCH_MATCH_BG));
 	assert.ok(!plain.some((line) => line.includes("Navigate code.")), "scrolled to the match");
-	assert.match(plain.join("\n"), /↑↓\/jk Scroll · n\/N Next\/Prev · \/ Search · Esc Back/);
+	assert.match(plain.join("\n"), /↑↓\/jk Scroll · n\/N Next\/Prev · \/ Search · c Copy · Esc Back/);
 
 	view.handleInput("n");
 	plain = plainFrame(view);
@@ -2219,7 +2223,7 @@ test("InjectionsView preview search types live, keeps the query on Enter, and dr
 	view.handleInput("\u001b");
 	plain = plainFrame(view);
 	assert.ok(!plain.some((line) => line.includes("Search:")));
-	assert.match(plain.join("\n"), /↑↓\/jk Scroll · PgUp\/PgDn Page · \/ Search · Esc Back/);
+	assert.match(plain.join("\n"), /↑↓\/jk Scroll · PgUp\/PgDn Page · \/ Search · c Copy · Esc Back/);
 });
 
 test("InjectionsView search stays within the width and drops the filter hint before others", () => {
@@ -2263,4 +2267,114 @@ test("InjectionsView content filter matches JSON as its preview expands it", () 
 	assert.match(plainFrame(view).join("\n"), /○ Name \| ◉ Content > "type": "object" +1 match/);
 	view.handleInput("\r");
 	assert.match(plainFrame(view)[4] ?? "", /^ {2}Search: "type": "object" +1\/1$/);
+});
+
+/** Let a resolved clipboard promise update the view before the next render. */
+async function settleCopy(): Promise<void> {
+	await new Promise((resolve) => setImmediate(resolve));
+}
+
+test("InjectionsView copies a highlighted group, item, and open preview", async () => {
+	const copied: string[] = [];
+	const actions: CopyActions = { copyText: async (text) => { copied.push(text); } };
+	const view = createView(8, undefined, () => 24, actions);
+
+	// The first highlighted row is the pi group; copy every item in it.
+	assert.match(plainFrame(view).find((line) => line.includes("Navigate")) ?? "", /c Copy/);
+	view.handleInput("c");
+	await settleCopy();
+	assert.equal(copied[0]?.split("\n\n").length, 8);
+	assert.match(copied[0] ?? "", /^pi-0 preview line 0/);
+	assert.match(copied[0] ?? "", /pi-7 preview line 39/);
+
+	// One item row copies only that item.
+	view.handleInput("j");
+	const itemText = copied[0]?.split("\n\n")[0] ?? "";
+	view.handleInput("c");
+	await settleCopy();
+	assert.equal(copied[1], itemText);
+
+	// Its open preview copies the same item text.
+	view.handleInput("\r");
+	assert.match(plainFrame(view).join("\n"), /↑↓\/jk Scroll · PgUp\/PgDn Page · \/ Search · c Copy · Esc Back/);
+	view.handleInput("c");
+	await settleCopy();
+	assert.equal(copied[2], itemText);
+	assert.match(plainFrame(view).join("\n"), /Copied [\d,]+ chars/);
+});
+
+test("InjectionsView reports an empty item without writing the clipboard", async () => {
+	const copied: string[] = [];
+	const empty: InjectionItem = {
+		id: "empty", kind: "base-prompt", source: { id: "pi", label: "pi", native: true },
+		label: "empty", chars: 0, tokens: 0, text: "",
+	};
+	const snap: InjectionSnapshot = { groups: [group("pi", true, [empty])], totalTokens: 0 };
+	const view = new InjectionsView(createTheme(), { snapshot: snap }, () => {}, () => 24, undefined, {
+		copyText: async (text) => { copied.push(text); },
+	});
+	view.handleInput("j");
+	view.handleInput("c");
+	await settleCopy();
+	assert.deepEqual(copied, []);
+	assert.match(plainFrame(view).join("\n"), /Nothing to copy/);
+});
+
+test("InjectionsView copies only the visible items of a filtered group", async () => {
+	const copied: string[] = [];
+	const view = createView(8, undefined, () => 24, { copyText: async (text) => { copied.push(text); } });
+
+	// Submit a name filter that keeps one item, then return to the group row.
+	view.handleInput("/");
+	typeKeys(view, "pi-3");
+	view.handleInput("\r");
+	view.handleInput("\u001b");
+	view.handleInput("k");
+	view.handleInput("c");
+	await settleCopy();
+
+	assert.equal(copied[0]?.split("\n\n").length, 1);
+	assert.match(copied[0] ?? "", /^pi-3 preview line 0/);
+});
+
+test("InjectionsView stops publishing a copy result after close", async () => {
+	let closed = false;
+	const pending: Array<() => void> = [];
+	const view = new InjectionsView(createTheme(), { snapshot: snapshot(8) }, () => { closed = true; }, () => 24, undefined, {
+		copyText: () => new Promise<void>((resolve) => pending.push(resolve)),
+	});
+	view.handleInput("c");
+	view.handleInput("\u001b");
+	assert.ok(closed);
+	pending[0]?.();
+	await settleCopy();
+	assert.doesNotMatch(plainFrame(view).join("\n"), /Copied/);
+});
+
+test("InjectionsView stops redrawing a copy result after the host disposes it", async () => {
+	const pending: Array<() => void> = [];
+	let refreshes = 0;
+	const view = createView(8, undefined, () => 24, {
+		copyText: () => new Promise<void>((resolve) => pending.push(resolve)),
+		refresh: () => { refreshes++; },
+	});
+	view.handleInput("c");
+	view.dispose();
+	const refreshesAtDispose = refreshes;
+	pending[0]?.();
+	await settleCopy();
+	assert.equal(refreshes, refreshesAtDispose);
+	assert.doesNotMatch(plainFrame(view).join("\n"), /Copied/);
+});
+
+test("InjectionsView keeps a cleared notice cleared when a copy resolves late", async () => {
+	const pending: Array<() => void> = [];
+	const view = createView(8, undefined, () => 24, {
+		copyText: () => new Promise<void>((resolve) => pending.push(resolve)),
+	});
+	view.handleInput("c");
+	view.handleInput("j");
+	pending[0]?.();
+	await settleCopy();
+	assert.doesNotMatch(plainFrame(view).join("\n"), /Copied/);
 });

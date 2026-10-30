@@ -15,6 +15,7 @@ import {
 import type { ContextUsageSnapshot } from "../src/model.ts";
 import { formatPercent, formatTokens, UsageView, type UsageViewInput } from "../src/ui/usage-view.ts";
 import { colorize } from "../src/ui/color.ts";
+import type { CopyActions } from "../src/ui/copy.ts";
 import {
 	descriptionNoteLines, emptyPreviewNote, probingDisabledNote, thinkingNote, usageNote,
 } from "../src/ui/notes.ts";
@@ -97,6 +98,7 @@ function createView(
 	done: (result: undefined) => void,
 	getTerminalRows?: () => number,
 	wheelScrollLines?: number,
+	actions?: CopyActions,
 ): UsageView {
 	const colors = input.categoryColors ?? DEFAULT_CATEGORY_COLORS;
 	const mapSize = input.mapSize ?? DEFAULT_MAP_SIZE;
@@ -106,6 +108,7 @@ function createView(
 		done,
 		getTerminalRows,
 		wheelScrollLines,
+		actions,
 	);
 }
 
@@ -649,7 +652,7 @@ test("UsageView opens a category block stream and skips full previews for comple
 	assert.ok(!plain.some((line) => /[■◧▦⛶]( [■◧▦⛶]){15}/.test(line)));
 	const hintIndex = plain.findIndex((line) => line.includes("↑↓/jk Navigate"));
 	assert.ok(hintIndex > 0);
-	assert.match(plain[hintIndex] ?? "", /↑↓\/jk Navigate · PgUp\/PgDn Page · \/ Search · Esc Back/);
+	assert.match(plain[hintIndex] ?? "", /↑↓\/jk Navigate · PgUp\/PgDn Page · \/ Search · c Copy · Esc Back/);
 	assert.ok(!plain[hintIndex]?.includes("Enter"));
 
 	// Down moves the gutter to the next block without touching the entry order
@@ -704,7 +707,7 @@ test("UsageView opens every single-entry category directly without a block cap o
 				assert.match(plain, /\[Only entry\] 42/);
 			}
 			assert.match(plain, /    line 1\b/);
-			assert.match(plain, /↑↓\/jk Scroll · PgUp\/PgDn Page · \/ Search · Esc Back/);
+			assert.match(plain, /↑↓\/jk Scroll · PgUp\/PgDn Page · \/ Search · c Copy · Esc Back/);
 			assert.doesNotMatch(plain, /┃|… \+|Enter|unsafe|\u0007/);
 			view.handleInput("\r");
 			assert.deepEqual(view.render(80), content, `${id}: Enter never adds another level`);
@@ -1718,16 +1721,18 @@ function plainFrame(view: UsageView, width = 80): string[] {
 }
 
 /** Move the legend selection down to the category labelled `label` and open it. */
-function openCategory(view: UsageView, label: string): void {
+function selectCategory(view: UsageView, label: string): void {
 	const selected = new RegExp(`→ +(?:\\S+ +)?${label} \\.`);
 	for (let step = 0; step < 50; step++) {
-		if (plainFrame(view).some((line) => selected.test(line))) {
-			view.handleInput("\r");
-			return;
-		}
+		if (plainFrame(view).some((line) => selected.test(line))) return;
 		view.handleInput("j");
 	}
 	assert.fail(`no legend row ${label}`);
+}
+
+function openCategory(view: UsageView, label: string): void {
+	selectCategory(view, label);
+	view.handleInput("\r");
 }
 
 /** Usage whose Tool Output holds three bash results; the first match hides below the block cap. */
@@ -1774,7 +1779,7 @@ test("UsageView block stream search selects the matching block and opens a cappe
 	openCategory(view, "Tool Output");
 	let plain = plainFrame(view);
 	assert.match(plain[2] ?? "", /^Tool Output/);
-	assert.match(plain.join("\n"), /↑↓\/jk Navigate · PgUp\/PgDn Page · \/ Search · Esc Back/);
+	assert.match(plain.join("\n"), /↑↓\/jk Navigate · PgUp\/PgDn Page · \/ Search · c Copy · Esc Back/);
 
 	view.handleInput("/");
 	typeKeys(view, "needle");
@@ -1785,7 +1790,7 @@ test("UsageView block stream search selects the matching block and opens a cappe
 	const selectedHeader = plain.find((line) => line.startsWith("┃ ["));
 	assert.match(selectedHeader ?? "", /:02:00\]/);
 	assert.ok(!plain.some((line) => line.includes("the needle is here")));
-	assert.match(plain.join("\n"), /↑↓\/jk Navigate · n\/N Next\/Prev · \/ Search · Esc Back/);
+	assert.match(plain.join("\n"), /↑↓\/jk Navigate · n\/N Next\/Prev · \/ Search · c Copy · Esc Back/);
 
 	view.handleInput("\r");
 	const lines = view.render(80);
@@ -1817,7 +1822,7 @@ test("UsageView searches single-entry content and keeps every line within the wi
 	openCategory(view, "read");
 	let plain = plainFrame(view);
 	assert.match(plain[2] ?? "", /^read/);
-	assert.match(plain.join("\n"), /↑↓\/jk Scroll · PgUp\/PgDn Page · \/ Search · Esc Back/);
+	assert.match(plain.join("\n"), /↑↓\/jk Scroll · PgUp\/PgDn Page · \/ Search · c Copy · Esc Back/);
 
 	view.handleInput("/");
 	typeKeys(view, "SECOND");
@@ -1854,4 +1859,114 @@ test("UsageView keeps an entry-header match when its capped block opens", () => 
 	const header = plain.findIndex((line) => /^ {2}\[.*:02:00\] \[bash\]/.test(line));
 	assert.ok(header > 0);
 	assert.ok((lines[header] ?? "").includes(SEARCH_MATCH_BG));
+});
+
+/** Let a resolved clipboard promise update the view before the next render. */
+async function settleCopy(): Promise<void> {
+	await new Promise((resolve) => setImmediate(resolve));
+}
+
+test("UsageView copies the highlighted category, block, and open content", async () => {
+	const copied: string[] = [];
+	const view = createView(createTheme(), { usage: searchUsage() }, () => {}, () => 30, undefined, {
+		copyText: async (text) => { copied.push(text); },
+	});
+	selectCategory(view, "Tool Output");
+	assert.match(plainFrame(view).find((line) => line.includes("Navigate")) ?? "", /c Copy/);
+
+	view.handleInput("c");
+	assert.match(plainFrame(view).join("\n"), /Copying…/);
+	await settleCopy();
+	assert.equal(copied[0], [
+		"first result",
+		Array.from({ length: 30 }, (_, line) => `output line ${line}`).join("\n") + "\nthe needle is here\n" +
+			Array.from({ length: 10 }, (_, line) => `tail line ${line}`).join("\n"),
+		"another needle up top",
+	].join("\n\n"));
+	assert.match(plainFrame(view).join("\n"), /Copied [\d,]+ chars/);
+
+	openCategory(view, "Tool Output");
+	assert.match(plainFrame(view).join("\n"), /↑↓\/jk Navigate · PgUp\/PgDn Page · \/ Search · c Copy · Esc Back/);
+	view.handleInput("c");
+	await settleCopy();
+	assert.equal(copied[1], "first result");
+	assert.match(plainFrame(view).join("\n"), /Copied [\d,]+ chars/);
+
+	const single = createView(createTheme(), { usage: usage() }, () => {}, () => 30, undefined, {
+		copyText: async (text) => { copied.push(text); },
+	});
+	openCategory(single, "read");
+	assert.match(plainFrame(single).join("\n"), /↑↓\/jk Scroll · PgUp\/PgDn Page · \/ Search · c Copy · Esc Back/);
+	single.handleInput("c");
+	await settleCopy();
+	assert.equal(copied[2], "read result content line\nsecond line");
+	assert.match(plainFrame(single).join("\n"), /Copied [\d,]+ chars/);
+});
+
+test("UsageView reports an empty highlighted category without writing the clipboard", async () => {
+	const copied: string[] = [];
+	const empty: ContextUsageSnapshot = {
+		computedAt: new Date("2026-07-11T12:00:00Z"),
+		modelLabel: "claude-opus-4-8",
+		categories: [{ id: "context-files", label: "Instruction Files", tokens: 0 }],
+		estimatedTokens: 0,
+	};
+	const view = createView(createTheme(), { usage: empty }, () => {}, () => 30, undefined, {
+		copyText: async (text) => { copied.push(text); },
+	});
+	view.handleInput("c");
+	await settleCopy();
+	assert.deepEqual(copied, []);
+	assert.match(plainFrame(view).join("\n"), /Nothing to copy/);
+});
+
+test("UsageView clears the copy notice on the next key and stops publishing after close", async () => {
+	const pending: Array<() => void> = [];
+	let closed = false;
+	const view = createView(createTheme(), { usage: usage() }, () => { closed = true; }, () => 30, undefined, {
+		copyText: () => new Promise<void>((resolve) => pending.push(resolve)),
+	});
+	selectCategory(view, "Tool Output");
+
+	view.handleInput("c");
+	pending[0]?.();
+	await settleCopy();
+	assert.match(plainFrame(view).join("\n"), /Copied [\d,]+ chars/);
+
+	view.handleInput("j");
+	assert.doesNotMatch(plainFrame(view).join("\n"), /Copying…|Copied/);
+	view.handleInput("k");
+
+	view.handleInput("c");
+	view.handleInput("\u001b");
+	assert.ok(closed);
+	pending[1]?.();
+	await settleCopy();
+	assert.doesNotMatch(plainFrame(view).join("\n"), /Copied/);
+});
+
+test("UsageView stops redrawing a copy result after the host disposes it", async () => {
+	const pending: Array<() => void> = [];
+	let refreshes = 0;
+	const view = createView(createTheme(), { usage: usage() }, () => {}, () => 30, undefined, {
+		copyText: () => new Promise<void>((resolve) => pending.push(resolve)),
+		refresh: () => { refreshes++; },
+	});
+	selectCategory(view, "Tool Output");
+	view.handleInput("c");
+	view.dispose();
+	const refreshesAtDispose = refreshes;
+	pending[0]?.();
+	await settleCopy();
+	assert.equal(refreshes, refreshesAtDispose);
+	assert.doesNotMatch(plainFrame(view).join("\n"), /Copied/);
+});
+
+test("UsageView drops the copy hint whole when the dashboard hint row is narrow", () => {
+	const view = createView(createTheme(), { usage: usage() }, () => {}, () => 30);
+	// The copy hint is optional and the Zoom hint is not, so a width that fits the
+	// rest of the row must drop the copy hint whole rather than cut "Esc Close".
+	const hints = plainFrame(view, 58).find((line) => line.includes("Navigate")) ?? "";
+	assert.match(hints, /Esc Close/);
+	assert.doesNotMatch(hints, /c Copy/);
 });

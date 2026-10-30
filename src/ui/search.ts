@@ -147,18 +147,22 @@ export function isSearchNavigationKey(data: string): boolean {
 		matchesKey(data, Key.pageDown);
 }
 
-/** Preview hints for plain navigation, an open search prompt, or a kept search. */
-export function searchHints(prompt: SearchPrompt, stepLabel: string): Hint[] {
+/**
+ * Preview hints for plain navigation, an open search prompt, or a kept search.
+ * `extra` sits before the closing hint; both views pass their copy action.
+ */
+export function searchHints(prompt: SearchPrompt, stepLabel: string, extra?: Hint): Hint[] {
+	const close: Hint[] = extra === undefined ? [["Esc", "Back"]] : [extra, ["Esc", "Back"]];
 	if (prompt.editing) return [["↑↓", stepLabel], ["Enter", "Done"], ["Esc", "Clear"]];
 	if (prompt.active) {
 		return [
 			[STEP_KEY_HINT, stepLabel],
 			[MATCH_STEP_KEY_HINT, "Next/Prev"],
 			[SEARCH_KEY, "Search", true],
-			["Esc", "Back"],
+			...close,
 		];
 	}
-	return [[STEP_KEY_HINT, stepLabel], ["PgUp/PgDn", "Page"], [SEARCH_KEY, "Search", true], ["Esc", "Back"]];
+	return [[STEP_KEY_HINT, stepLabel], ["PgUp/PgDn", "Page"], [SEARCH_KEY, "Search", true], ...close];
 }
 
 /** Selection change waiting for the next render, which knows the wrapped lines. */

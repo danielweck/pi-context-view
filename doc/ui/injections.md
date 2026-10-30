@@ -127,6 +127,13 @@ explicitly, and Enter then opens nothing.
 Enter on a content-mode match opens its preview with the same query already
 searched, at its first match.
 
+`c` copies the highlighted row or open preview. A group row copies its visible
+items in order, so an active filter applies and never copies a hidden top-level
+row; a kept parent still copies its whole captured text, which includes its
+children. An item row and its preview copy that item's captured text. The
+clipboard receives the sanitized content itself, without tree glyphs, counts,
+or preview subheaders.
+
 ## Injection preview
 
 Enter opens sanitized full content with enough identity and accounting context
